@@ -1,0 +1,16 @@
+﻿@namespace BlazorTableExample
+<div id=@($"{Guid.NewGuid()}") class="string-shrink">
+    @GetDisplayText()
+
+    @if (CanBeExpanded)
+    {
+        @if (IsExpanded)
+        {
+            <a href="javascript:;" @onclick="@(() => { IsExpanded = false; })" style="font-style: initial; font-size: 0.7em; color: dimgray; cursor: pointer;">Show less</a>
+        }
+        else
+        {
+            <a href="javascript:;" @onclick="@(() => { IsExpanded = true; })" style="font-style: initial; font-size: 0.7em; color: dimgray; cursor: pointer;">Show more</a>
+        }
+    }
+</div>

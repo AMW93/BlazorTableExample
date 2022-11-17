@@ -1,0 +1,41 @@
+﻿@namespace BlazorTableExample
+@page "/"
+@page "/login";
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web;
+<style>
+    .dragging {
+        box-shadow: 0 0 6px rgb(23, 162, 184);
+    }
+</style>
+
+<Table ID="tblTesting" Height="700px" EditIndex=@EditIndex TGridItem="Names" Items="lstNames">
+    <Columns>
+        <TemplateField>
+            <EditItemTemplate>
+                <button class="btn btn-info" type="button" @onclick=@(x => EditIndex = -1)>
+                    Back
+                </button>
+            </EditItemTemplate>
+        </TemplateField>
+        <BoundField Property="@(x => x.nameID)" Sortable="true" />
+        <BoundField Property="@(x => x.fName)" Sortable="true" />
+        <BoundField Property="@(x => x.lName)" Sortable="true" />
+        <TemplateField HeaderText="Toggle">
+            <ItemTemplate>
+                <buton @onclick=@(x => EditIndexChanged(context)) type="button" class="btn btn-primary">Toggle EditIndex</buton>
+            </ItemTemplate>
+        </TemplateField>
+        <TemplateField HeaderText="Test Col" Context="c" SortBy=@(x => x.nameID)>
+            <ItemTemplate>
+                <StringShrink Text="Lorem Ipsum is simply dummy text of the printing and typesetting industry. Specimen book." MaxCharacters="25" />
+            </ItemTemplate>
+            <EditItemTemplate>
+                <button type="button" class="btn btn-warning">
+                    sweet deal
+                </button>
+            </EditItemTemplate>
+        </TemplateField>
+    </Columns>
+</Table>
+

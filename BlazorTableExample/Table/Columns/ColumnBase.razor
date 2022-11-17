@@ -1,0 +1,124 @@
+@using Microsoft.AspNetCore.Components.Rendering;
+@using Microsoft.AspNetCore.Components.Web.Virtualization;
+@namespace BlazorTableExample
+@typeparam TGridItem
+@{
+    InternalGridContext.Grid.AddColumn(this, IsDefaultSort);
+}
+@code
+{
+    [CascadingParameter] internal InternalGridContext<TGridItem> InternalGridContext { get; set; } = default!;
+
+    /// <summary>
+    /// Title text for the column. This is rendered automatically if <see cref="HeaderTemplate" /> is not used.
+    /// </summary>
+    [Parameter] public string? HeaderText { get; set; }
+
+    /// <summary>
+    /// Tooltip for the column.
+    /// </summary>
+    [Parameter] public string HeaderTooltip { get; set; }
+
+    /// <summary>
+    /// An optional CSS class name. If specified, this is included in the class attribute of table header and body cells
+    /// for this column.
+    /// </summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// An optional template for this column's header cell. If not specified, the default header template
+    /// includes the <see cref="HeaderText" /> along with any applicable sort indicators and options buttons.
+    /// </summary>
+    [Parameter] public RenderFragment<ColumnBase<TGridItem>>? HeaderTemplate { get; set; }
+
+    /// <summary>
+    /// Indicates whether the data should be sortable by this column.
+    ///
+    /// The default value may vary according to the column type (for example, a <see cref="TemplateField{TGridItem}" />
+    /// is sortable by default if any <see cref="TemplateField{TGridItem}.SortBy" /> parameter is specified).
+    /// </summary>
+    [Parameter] public bool? Sortable { get; set; }
+
+    /// <summary>
+    /// If specified and not null, indicates that this column represents the initial sort order
+    /// for the grid. The supplied value controls the default sort direction.
+    /// </summary>
+    [Parameter] public SortDirection? IsDefaultSort { get; set; }
+
+    /// <summary>
+    /// If specified, virtualized grids will use this template to render cells whose data has not yet been loaded.
+    /// </summary>
+    [Parameter] public RenderFragment<PlaceholderContext>? PlaceholderTemplate { get; set; }
+
+    /// <summary>
+    /// Gets a reference to the enclosing <see cref="Grid{TGridItem}" />.
+    /// </summary>
+    public Table<TGridItem> Grid => InternalGridContext.Grid;
+
+    /// <summary>
+    /// Overridden by derived components to provide rendering logic for the column's cells.
+    /// </summary>
+    /// <param name="builder">The current <see cref="RenderTreeBuilder" />.</param>
+    /// <param name="item">The data for the row being rendered.</param>
+    protected internal abstract void CellContent(RenderTreeBuilder builder, TGridItem item);
+
+    /// <summary>
+    /// Gets or sets a <see cref="RenderFragment" /> that will be rendered for this column's header cell.
+    /// This allows derived components to change the header output. However, derived components are then
+    /// responsible for using <see cref="HeaderTemplate" /> within that new output if they want to continue
+    /// respecting that option.
+    /// </summary>
+    protected internal RenderFragment HeaderContent { get; protected set; }
+
+    /// <summary>
+    /// Get a value indicating whether this column should act as sortable if no value was set for the
+    /// <see cref="ColumnBase{TGridItem}.Sortable" /> parameter. The default behavior is not to be
+    /// sortable unless <see cref="ColumnBase{TGridItem}.Sortable" /> is true.
+    ///
+    /// Derived components may override this to implement alternative default sortability rules.
+    /// </summary>
+    /// <returns>True if the column should be sortable by default, otherwise false.</returns>
+    protected virtual bool IsSortableByDefault() => false;
+
+
+    /// <summary>
+    /// Constructs an instance of <see cref="ColumnBase{TGridItem}" />.
+    /// </summary>
+    public ColumnBase()
+    {
+        HeaderContent = RenderDefaultHeaderContent;
+    }
+
+    private void RenderDefaultHeaderContent(RenderTreeBuilder __builder)
+    {
+        @if (HeaderTemplate is not null && Grid.Items.Count > 0)
+        {
+            @HeaderTemplate(this)
+        }
+        else
+        {
+            if (Sortable.HasValue ? Sortable.Value : IsSortableByDefault())
+            {
+                <a href="javascript:;" class="col-title" @onclick="@(() => Grid.SortByColumnAsync(this))">
+                    <div class="col-title-text me-1">@HeaderText</div>
+                    <div class="sort-indicator" aria-hidden="true"></div>
+                </a>
+            }
+            else
+            {
+                <div class="col-title">
+                    <div class="col-title-text">@HeaderText</div>
+                </div>
+            }
+        }
+    }
+
+    internal void RenderPlaceholderContent(RenderTreeBuilder __builder, PlaceholderContext placeholderContext)
+    {
+        // Blank if no placeholder template was supplied, as it's enough to style with CSS by default
+        if (PlaceholderTemplate is not null)
+        {
+            @PlaceholderTemplate(placeholderContext)
+        }
+    }
+}

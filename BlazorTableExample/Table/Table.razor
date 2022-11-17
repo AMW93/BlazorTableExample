@@ -1,0 +1,259 @@
+@namespace BlazorTableExample
+@using Microsoft.AspNetCore.Components.Rendering;
+@typeparam TGridItem
+
+<div class="vstack gap-1 w-100 table-responsive" style="--table-body-height: @Height; --table-body-width: @Width;">
+    <CascadingValue TValue="InternalGridContext<TGridItem>" IsFixed="true" Value="@_internalGridContext">
+        @if (Searchable && Items.Count > 0)
+        {
+            <div class="d-flex flex-row align-items-center ms-1 mt-1 mb-1">
+                <div class="input-group input-group-sm" style="width: @SearchWidth;">
+                    <input type="text" class="form-control form-control-sm" @bind="@SearchText" @bind:event="oninput" @onkeyup="@ResetTimer" placeholder="Search Results..." />
+                    <span class="input-group-text">
+                        @if (ShowSearchSpinner)
+                        {
+                            @*<LoadingSpinner Height="20px" ShowLoadingText=false />*@
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+                                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+                            </svg>
+                        }
+                    </span>
+                    @if (ShowSearchCount && !SearchText.IsNullOrEmpty())
+                    {
+                        <span class="input-group-text">@ItemsFiltered.Count</span>
+                    }
+                </div>
+            </div>
+        }
+
+        <div>
+            @{
+                StartCollectingColumns();
+            }
+
+            @Columns
+
+            <Defer>
+                @{
+                    FinishCollectingColumns();
+                }
+                <ColumnsCollectedNotifier TGridItem="TGridItem" />
+                <table id=@ID class="@GridClass() table tblComponent" theme="@Theme" aria-rowcount="@(_ariaBodyRowCount + 1)" @ref="_tableReference">
+                    <tbody style="display: block; height: auto; max-height: @Height; width: @Width; overflow: auto">
+                        @if (Items.Count > 0)
+                        {
+                            <tr class="@($"tblHeader{ID}") tblComponentHeader sticky-top">
+                                @_renderColumnHeaders
+                            </tr>
+                        }
+                        @if (Virtualize)
+                        {
+                            @*<Virtualize @ref="@_virtualizeComponent"
+                        TItem="(int RowIndex, TGridItem Data)"
+                        ItemSize="@ItemSize"
+                        ItemsProvider="@ProvideVirtualizedItems"
+                        ItemContent="@(item => builder => RenderRow(builder, item.RowIndex, item.Data))"
+                        Placeholder="@(placeholderContext => builder => RenderPlaceholderRow(builder, placeholderContext))" />*@
+
+                            <Virtualize Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList()">
+                                <ItemContent>
+                                    @{
+                                        RenderVirtualizedRows(__builder4, item);
+                                    }
+                                </ItemContent>
+                                <Placeholder>
+                                    @*<LoadingSpinner Height="25px" />*@
+                                </Placeholder>
+                            </Virtualize>
+                        }
+                        else
+                        {
+                            @_renderNonVirtualizedRows
+                        }
+
+                        @{
+                            RenderFooterContent(__builder3);
+                        }
+                    </tbody>
+                </table>
+
+            </Defer>
+        </div>
+    </CascadingValue>
+</div>
+
+
+@code {
+
+    private void RenderVirtualizedRows(RenderTreeBuilder __builder, TGridItem item)
+    {
+        var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
+        RowIndex = initialRowIndex;
+        if (EditIndex != -1)
+            EditItem = Items.ElementAt(EditIndex);
+
+        RenderRow(__builder, RowIndex++, item);
+    }
+
+    private void RenderNonVirtualizedRows(RenderTreeBuilder __builder)
+    {
+        var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
+        RowIndex = initialRowIndex;
+        if (EditIndex != -1)
+        {
+            EditItem = Items.ElementAt(EditIndex);
+            EditIndex += 3;
+        }
+
+        foreach (var item in ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList())
+            RenderRow(__builder, RowIndex++, item);
+    }
+
+    private void RenderRow(RenderTreeBuilder __builder, int rowIndex, TGridItem item)
+    {
+        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex">
+            @foreach (var col in _columns)
+            {
+                <td class="" @key="@col">
+                    @{
+                        col.CellContent(__builder, item);
+                    }
+                </td>
+            }
+        </tr>
+    }
+
+    private void RenderPlaceholderRow(RenderTreeBuilder __builder, PlaceholderContext placeholderContext)
+    {
+        <tr class="@($"tblRow{ID}")" aria-rowindex="@(placeholderContext.Index + 1)">
+            @foreach (var col in _columns)
+            {
+                <td class="grid-cell-placeholder" @key="@col">
+                    @{
+                        col.RenderPlaceholderContent(__builder, placeholderContext);
+                    }
+                </td>
+            }
+        </tr>
+    }
+
+    private void RenderColumnHeaders(RenderTreeBuilder __builder)
+    {
+        //foreach (var col in _columns)
+        for (int i = 0; i < _columns.Count; i++)
+        {
+            var col = _columns[i];
+            <th title="@ColumnHeaderTooltip(col)" class="@ColumnHeaderClass(col)" aria-sort="@AriaSortValue(col)" @key="@col" scope="col">
+                <div class="tblHeaderOptionsContainer">
+                    <div class="col-header-content">@col.HeaderContent</div>
+                    @if (ResizableColumns)
+                    {
+                        <div class="col-width-draghandle"></div>
+                    }
+
+                    @if (i == 0 && ShowHeaderAddButton())
+                    {
+                        <div class="tbl-add-btn">
+                            <button class="btn btn-sm btn-primary" @onclick=@(x => HeaderAddButton_Clicked(col))>Add</button>
+                        </div>
+                    }
+                </div>
+            </th>
+        }
+    }
+
+    private void RenderFooterContent(RenderTreeBuilder __builder)
+    {
+        //Footer and pager
+        if (FooterTemplate is null && AllowPaging)
+        {
+            <tr class="@($"tblFooter{ID}") tblComponentFooter position-sticky bottom-0 start-0 end-0 bg-white">
+                <td colspan="999">
+                    <div class="d-flex flex-row justify-content-between">
+                        <div class="d-flex flex-row">
+                            <ul class="me-3 pagination pagination-sm justify-content-center">
+                                @if (ShowPrvBtn)
+                                {
+                                    <li class="page-item">
+                                        <a href="javascript:;" class="page-link" @onclick=@(x => PageIndex_Changed(-2)) tabindex="-1" aria-disabled="true">Previous</a>
+                                    </li>
+                                }
+                                @if (ShowOverflowBack)
+                                {
+                                    <li class="page-item">
+                                        <a href="javascript:;" class="page-link" @onclick=@(x => PageIndex_Changed(-4))>...</a>
+                                    </li>
+                                }
+                                @for (int i = StartIndex; i < StartIndex + VisiblePageCnt; i++)
+                                {
+                                    if (i <= PageCount)
+                                    {
+                                        int ndx = i;
+                                        string className = string.Empty;
+                                        if (ndx == PageIndex)
+                                            className = "active";
+                                        <li class="page-item @className"><a href="javascript:;" class="page-link" @onclick=@(x => PageIndex_Changed(ndx))>@i</a></li>
+                                    }
+                                }
+                                @if (ShowOverflowForward)
+                                {
+                                    <li class="page-item">
+                                        <a href="javascript:;" class="page-link" @onclick=@(x => PageIndex_Changed(-3))>...</a>
+                                    </li>
+                                }
+                                @if (ShowNextBtn)
+                                {
+                                    <li class="page-item">
+                                        <a href="javascript:;" class="page-link" @onclick=@(x => PageIndex_Changed(-1))>Next</a>
+                                    </li>
+                                }
+                            </ul>
+                            <div>
+                                Items Per Page
+                                <div class="btn-group ms-1">
+                                    <button type="button" class="btn btn-secondary dropdown-toggle sizeSelector" data-bs-toggle="dropdown" aria-expanded="false">
+                                        @PageSize
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        @for (int i = 1; i <= 10; i++)
+                                        {
+                                            int ndx = i * 5;
+                                            <li class="dropdown-item @(ndx == PageSize ? "active" : string.Empty)" @onclick=@(x => PageSize_Changed(@ndx))>@ndx</li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        @if (Items.Count > 0 && ItemsFiltered.Count > 0)
+                        {
+                            <div>
+                                @($"Count: {ItemsFiltered.Count}")
+                            </div>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        else if (FooterTemplate is not null)
+        {
+            <tr class="@($"tblFooter{ID}") tblComponentFooter position-sticky bottom-0 start-0 end-0 bg-white">
+                <td colspan="999">
+                    @FooterTemplate
+                </td>
+            </tr>
+        }
+        else if (!HideFooter && (Items.Count > 0 && ItemsFiltered.Count > 0))
+        {
+            <tr class="@($"tblFooter{ID}") tblComponentFooter position-sticky bottom-0 start-0 end-0 bg-white">
+                <td colspan="999">
+                    <div class="d-flex flex-row justify-content-end">
+                        @($"Count: {ItemsFiltered.Count}")
+                    </div>
+                </td>
+            </tr>
+        }
+    }
+}
