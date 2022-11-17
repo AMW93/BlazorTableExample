@@ -71,7 +71,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     [Parameter] public float ItemSize { get; set; } = 53;
 
     [Parameter] public string Height { get; set; } = string.Empty;
-    [Parameter] public string Width { get; set; } = string.Empty;
+    [Parameter] public string Width { get; set; } = "fit-content";
     [Parameter, EditorRequired] public string ID { get; set; } = string.Empty;
 
     [Parameter, AllowNull]
