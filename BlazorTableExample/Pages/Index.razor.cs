@@ -8,6 +8,14 @@ namespace BlazorTableExample
         public List<Names> lstNames = new();
         private Names EditName = new();
         private int EditIndex = -1;
+        private string NewName = string.Empty;
+
+        private async Task SaveRow()
+        {
+            Names rec = lstNames.ElementAt(EditIndex);
+            rec.fName = NewName;
+            EditIndex = -1;
+        }
 
         protected override async Task OnInitializedAsync()
         {
@@ -23,6 +31,7 @@ namespace BlazorTableExample
 
         private void GetNames()
         {
+            lstNames.Clear();
             lstNames.Add(new Names { fName = "Liam", lName = "Karter", nameID = 0 });
             lstNames.Add(new Names { fName = "Noah     ", lName = "Timothy", nameID = 0 });
             lstNames.Add(new Names { fName = "Oliver   ", lName = "Abraham", nameID = 0 });

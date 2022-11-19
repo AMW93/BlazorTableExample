@@ -60,8 +60,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     [Parameter] public bool AllowPaging { get; set; } = false;
     [Parameter] public bool HideFooter { get; set; } = false;
 
-    [Parameter]
-    public int PageSize { get; set; } = 0;
+    [Parameter] public int PageSize { get; set; } = 0;
 
     /// <summary>
     /// This is applicable only when using <see cref="Virtualize"/>. It defines an expected height in pixels for
@@ -74,8 +73,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     [Parameter] public string Width { get; set; } = "fit-content";
     [Parameter, EditorRequired] public string ID { get; set; } = string.Empty;
 
-    [Parameter, AllowNull]
-    public RenderFragment? FooterTemplate { get; set; }
+    [Parameter, AllowNull] public RenderFragment? FooterTemplate { get; set; }
 
     /// <summary>
     /// If true, renders draggable handles around the column headers, allowing the user to resize the columns
@@ -100,12 +98,9 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter] public int EditIndex { get; set; } = -1;
 
-    [Parameter]
-    public string SearchWidth { get; set; } = "350px";
-    [Parameter]
-    public bool Searchable { get; set; } = true;
-    [Parameter]
-    public EventCallback ColumnWidthChanged { get; set; }
+    [Parameter] public string SearchWidth { get; set; } = "350px";
+    [Parameter] public bool Searchable { get; set; } = true;
+    [Parameter] public EventCallback ColumnWidthChanged { get; set; }
 
     /// <summary>
     /// When true, includes a default add button in the header cell of the column.
@@ -122,7 +117,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     private ElementReference _tableReference;
     private Virtualize<TGridItem>? _virtualizeComponent;
     private int _ariaBodyRowCount;
-    public List<TGridItem> ItemsFiltered = new();
+    public HashSet<TGridItem> ItemsFiltered = new();
 
     // IQueryable only exposes synchronous query APIs. IAsyncQueryExecutor is an adapter that lets us invoke any
     // async query APIs that might be available. We have built-in support for using EF Core's async query APIs.
@@ -166,6 +161,9 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     private int VisiblePageCnt = 1;
     private int SkipCnt = 0;
     private bool AddButtonIncluded;
+    private bool AllowRender = true;
+    private bool FilterMode = false;
+    protected override bool ShouldRender() => AllowRender;
 
 
     /// <summary>
@@ -214,11 +212,18 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     protected override Task OnParametersSetAsync()
     {
         if (ItemsFiltered.Count == 0 && Items.Count > 0)
-            ItemsFiltered.AddRange(Items);
-        else if (Items.Count != ItemsFiltered.Count)
         {
-            ItemsFiltered.Clear();
-            ItemsFiltered.AddRange(Items);
+            foreach(var rec in Items)
+            {
+                ItemsFiltered.Add(rec);
+            }
+        }
+        else if (!FilterMode && Items.Count != ItemsFiltered.Count)
+        {
+            foreach (var rec in Items)
+            {
+                ItemsFiltered.Add(rec);
+            }
         }
 
         if (Items is not null && ItemsProvider is not null)
@@ -289,12 +294,14 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
 
     private void ResetTimer()
     {
+        AllowRender = false;
         timer.Stop();
         timer.Start();
     }
 
     private async void OnTypingDone(object source, ElapsedEventArgs e)
     {
+        FilterMode = true;
         ShowSearchCount = false;
         if (_token != null)
         {
@@ -340,6 +347,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
             }
         }
         ShowSearchCount = true;
+        AllowRender = true;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -349,14 +357,23 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
         EditIndex = -1;
         ItemsFiltered.Clear();
         if (SearchText.IsNullOrEmpty())
-            ItemsFiltered.AddRange(Items);
+        {
+            foreach (var rec in Items)
+            {
+                ItemsFiltered.Add(rec);
+            }
+            FilterMode = false;
+        }
         else
         {
             var lst = new List<TGridItem>();
             List<string> r = lstSearch.FindAll(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
             for (int i = 0; i < r.Count; i++)
                 lst.Add(Items[lstSearch.IndexOf(r[i])]);
-            ItemsFiltered.AddRange(lst);
+            foreach (var rec in lst)
+            {
+                ItemsFiltered.Add(rec);
+            }
         }
 
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
@@ -459,7 +476,10 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
             if (!thisLoadCts.IsCancellationRequested)
             {
                 ItemsFiltered.Clear();
-                ItemsFiltered.AddRange(result.Items);
+                foreach (var rec in result.Items)
+                {
+                    ItemsFiltered.Add(rec);
+                }
                 _ariaBodyRowCount = result.TotalItemCount;
                 _pendingDataLoadCancellationTokenSource = null;
             }
@@ -642,5 +662,14 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
             ShowNextBtn = false;
             ShowPrvBtn = false;
         }
+    }
+
+    private async Task start()
+    {
+        await _jsModule.InvokeVoidAsync("start");
+    }
+    private async Task dragover()
+    {
+        await _jsModule.InvokeVoidAsync("dragover");
     }
 }

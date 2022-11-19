@@ -113,7 +113,7 @@
 
     private void RenderRow(RenderTreeBuilder __builder, int rowIndex, TGridItem item)
     {
-        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex">
+        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex" >
             @foreach (var col in _columns)
             {
                 <td class="" @key="@col">
