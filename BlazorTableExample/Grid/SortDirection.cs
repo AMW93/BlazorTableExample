@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// Describes the direction in which a <see cref="Table{TGridItem}"/> column is sorted.
+/// Describes the direction in which a <see cref="Grid{TGridItem}"/> column is sorted.
 /// </summary>
 public enum SortDirection
 {
@@ -19,7 +19,7 @@ public enum SortDirection
     Descending,
 
     /// <summary>
-    /// Automatic sort order. When used with <see cref="Table{TGridItem}.SortByColumnAsync(ColumnBase{TGridItem}, SortDirection)"/>,
+    /// Automatic sort order. When used with <see cref="Grid{TGridItem}.SortByColumnAsync(ColumnBase{TGridItem}, SortDirection)"/>,
     /// the sort order will automatically toggle between <see cref="Ascending"/> and <see cref="Descending"/> on successive calls, and
     /// resets to <see cref="Ascending"/> whenever the specified column is changed.
     /// </summary>

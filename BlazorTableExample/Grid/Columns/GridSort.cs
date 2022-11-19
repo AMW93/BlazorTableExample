@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 namespace BlazorTableExample;
 
 /// <summary>
-/// Represents a sort order specification used within <see cref="Table{TGridItem}"/>.
+/// Represents a sort order specification used within <see cref="Grid{TGridItem}"/>.
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 public class GridSort<TGridItem>

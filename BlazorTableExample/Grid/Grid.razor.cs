@@ -1,13 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
-
-//TODO: There's a mixup between the Items, Itemsfiltered and ItemsProvided. Straighten it out
-
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Microsoft.JSInterop;
+using Newtonsoft.Json;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Timers;
 
 namespace BlazorTableExample;
@@ -17,7 +12,7 @@ namespace BlazorTableExample;
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 [CascadingTypeParameter(nameof(TGridItem))]
-public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
+public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
 {
     [Inject] IJSRuntime Script { get; set; }
     [Inject] private IServiceProvider Services { get; set; } = default!;
@@ -41,14 +36,9 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     [Parameter] public GridItemsProvider<TGridItem>? ItemsProvider { get; set; }
 
     /// <summary>
-    /// An optional CSS class name. If given, this will be included in the class attribute of the rendered table.
+    /// An optional CSS class name. If given, this will be included in the class attribute of the rendered grid.
     /// </summary>
     [Parameter] public string? Class { get; set; }
-
-    /// <summary>
-    /// A theme name, with default value "default". This affects which styling rules match the table.
-    /// </summary>
-    [Parameter] public string? Theme { get; set; } = "default";
 
     /// <summary>
     /// Defines the child components of this instance. For example, you may define columns by adding
@@ -109,15 +99,15 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     [Parameter] public bool ShowAddButton { get; set; }
 
     /// <summary>
-    /// EventCallback for the parent to execute some code to add a new row. No call to StateHasChanged is needed for the table to update
+    /// EventCallback for the parent to execute some code to add a new row. No call to StateHasChanged is needed for the grid to update
     /// </summary>
     [Parameter] public EventCallback AddRecord_Click { get; set; }
 
     public int RowIndex { get; set; } = 0;
-    private ElementReference _tableReference;
+    private ElementReference _gridReference;
     private Virtualize<TGridItem>? _virtualizeComponent;
-    private int _ariaBodyRowCount;
-    public HashSet<TGridItem> ItemsFiltered = new();
+    private List<TGridItem> ItemsFiltered = new(); //the collection we do near everything with. This is the one that matters most
+    private List<TGridItem> ItemsState = new(); //holds the current itemcollection so we can run some code only when the collection changes.. which we wont know until the component reloads
 
     // IQueryable only exposes synchronous query APIs. IAsyncQueryExecutor is an adapter that lets us invoke any
     // async query APIs that might be available. We have built-in support for using EF Core's async query APIs.
@@ -160,7 +150,6 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     private bool ShowPrvBtn = false;
     private int VisiblePageCnt = 1;
     private int SkipCnt = 0;
-    private bool AddButtonIncluded;
     private bool AllowRender = true;
     private bool FilterMode = false;
     protected override bool ShouldRender() => AllowRender;
@@ -175,7 +164,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Constructs an instance of <see cref="Grid{TGridItem}"/>.
     /// </summary>
-    public Table()
+    public Grid()
     {
         _columns = new();
         _internalGridContext = new(this);
@@ -192,6 +181,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        ItemsState = new();
         _token = new();
         timer = new System.Timers.Timer(250);
         timer.Elapsed += OnTypingDone;
@@ -211,30 +201,19 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     /// <inheritdoc />
     protected override Task OnParametersSetAsync()
     {
-        if (ItemsFiltered.Count == 0 && Items.Count > 0)
+        if (Searchable && lstSearch.Count == 0 || Searchable && JsonConvert.SerializeObject(ItemsState) != JsonConvert.SerializeObject(Items))
         {
-            foreach(var rec in Items)
-            {
-                ItemsFiltered.Add(rec);
-            }
-        }
-        else if (!FilterMode && Items.Count != ItemsFiltered.Count)
-        {
-            foreach (var rec in Items)
-            {
-                ItemsFiltered.Add(rec);
-            }
-        }
-
-        if (Items is not null && ItemsProvider is not null)
-            throw new InvalidOperationException($"{nameof(Table<TGridItem>)} requires one of {nameof(Items)} or {nameof(ItemsProvider)}, but both were specified.");
-
-        if (Searchable)
-        {
+            ItemsState = new(JsonConvert.DeserializeObject<List<TGridItem>>(JsonConvert.SerializeObject(Items)));
             lstSearch.Clear();
             for (int i = 0; i < Items.Count; i++)
                 AddToSearch(Items[i]);
         }
+
+        if ((!FilterMode && Items.Count != ItemsFiltered.Count) || (ItemsFiltered.Count == 0 && Items.Count > 0))
+            ItemsFiltered = new(Items);
+
+        if (Items is not null && ItemsProvider is not null)
+            throw new InvalidOperationException($"{nameof(Grid<TGridItem>)} requires one of {nameof(Items)} or {nameof(ItemsProvider)}, but both were specified.");
 
         if (AllowPaging && PageSize == 0)
             PageSize = 10;
@@ -244,7 +223,6 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
         if (AllowPaging)
         {
             PageCount = (int)Math.Ceiling(Items.Count / (double)PageSize);
-
             if (PageCount > 5)
             {
                 ShowOverflowForward = true;
@@ -280,9 +258,9 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
     {
         if (firstRender)
         {
-            DotNetObjectReference<Table<TGridItem>>? DotNet = DotNetObjectReference.Create(this);
-            _jsModule = await Script.InvokeAsync<IJSObjectReference>("import", "./Table/Table.razor.js");
-            _jsEventDisposable = await _jsModule.InvokeAsync<IJSObjectReference>("init", _tableReference, DotNet);
+            DotNetObjectReference<Grid<TGridItem>>? DotNet = DotNetObjectReference.Create(this);
+            _jsModule = await Script.InvokeAsync<IJSObjectReference>("import", "./Grid/Grid.razor.js");
+            _jsEventDisposable = await _jsModule.InvokeAsync<IJSObjectReference>("init", _gridReference, DotNet);
         }
     }
 
@@ -311,7 +289,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
 
         _token = new();
         ShowSearchSpinner = false;
-        Task task = Task.Run(FilterTable, _token.Token);
+        Task task = Task.Run(Filter, _token.Token);
 
         //give the method a 250 milliseconds to complete before we check. this prevents screen flicker on tasks that complete near instantly
         await Task.Delay(250);
@@ -351,29 +329,21 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task FilterTable()
+    private async Task Filter()
     {
         RowIndex = 0;
         EditIndex = -1;
-        ItemsFiltered.Clear();
         if (SearchText.IsNullOrEmpty())
         {
-            foreach (var rec in Items)
-            {
-                ItemsFiltered.Add(rec);
-            }
+            ItemsFiltered = new(Items);
             FilterMode = false;
         }
         else
         {
-            var lst = new List<TGridItem>();
-            List<string> r = lstSearch.FindAll(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
-            for (int i = 0; i < r.Count; i++)
-                lst.Add(Items[lstSearch.IndexOf(r[i])]);
-            foreach (var rec in lst)
-            {
-                ItemsFiltered.Add(rec);
-            }
+            ItemsFiltered = new(
+                lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                         .Select(x => Items.ElementAt(lstSearch.IndexOf(x)))
+            );
         }
 
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
@@ -475,12 +445,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
             var result = await ResolveItemsRequestAsync(request);
             if (!thisLoadCts.IsCancellationRequested)
             {
-                ItemsFiltered.Clear();
-                foreach (var rec in result.Items)
-                {
-                    ItemsFiltered.Add(rec);
-                }
-                _ariaBodyRowCount = result.TotalItemCount;
+                ItemsFiltered = new(result.Items);
                 _pendingDataLoadCancellationTokenSource = null;
             }
         }
@@ -530,11 +495,13 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
 
     private async Task HeaderAddButton_Clicked(ColumnBase<TGridItem> column)
     {
-        await AddRecord_Click.InvokeAsync();
+        if (AddRecord_Click.HasDelegate)
+            await AddRecord_Click.InvokeAsync();
+        else
+            throw new ArgumentNullException($"AddRecord_CLick has no matching delegate which accepts a parameter of type '{typeof(TGridItem).Name}'");
     }
 
-    private string GridClass()
-        => $"tblComponent {Class} {(_pendingDataLoadCancellationTokenSource is null ? null : "loading")}";
+    private string GridClass() => $"tblComponent {Class} {(_pendingDataLoadCancellationTokenSource is null ? null : "loading")}";
 
     private static string? ColumnClass(ColumnBase<TGridItem> column) => column.Class;
 
@@ -561,7 +528,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async void PageIndex_Changed(int ndx)
+    private void PageIndex_Changed(int ndx)
     {
         ShowOverflowBack = false;
         ShowOverflowForward = false;
@@ -626,7 +593,7 @@ public partial class Table<TGridItem> : ComponentBase, IAsyncDisposable
         ShowNextPrv();
     }
 
-    private async Task PageSize_Changed(int size)
+    private void PageSize_Changed(int size)
     {
         StartIndex = 1;
         PageSize = size;

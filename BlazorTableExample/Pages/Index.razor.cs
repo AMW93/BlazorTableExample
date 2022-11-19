@@ -9,6 +9,7 @@ namespace BlazorTableExample
         private Names EditName = new();
         private int EditIndex = -1;
         private string NewName = string.Empty;
+        private Grid<Names>? Table = new();
 
         private async Task SaveRow()
         {

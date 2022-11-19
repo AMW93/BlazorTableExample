@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// A callback that provides data for a <see cref="Table{TGridItem}"/>.
+/// A callback that provides data for a <see cref="Grid{TGridItem}"/>.
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 /// <param name="request">Parameters describing the data being requested.</param>

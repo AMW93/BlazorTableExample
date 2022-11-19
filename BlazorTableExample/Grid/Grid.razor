@@ -41,7 +41,7 @@
                     FinishCollectingColumns();
                 }
                 <ColumnsCollectedNotifier TGridItem="TGridItem" />
-                <table id=@ID class="@GridClass() table tblComponent" theme="@Theme" aria-rowcount="@(_ariaBodyRowCount + 1)" @ref="_tableReference">
+                <table id=@ID class="@GridClass() table tblComponent" @ref="_gridReference">
                     <tbody style="display: block; height: auto; max-height: @Height; width: @Width; overflow: auto">
                         @if (Items.Count > 0)
                         {
@@ -49,6 +49,7 @@
                                 @_renderColumnHeaders
                             </tr>
                         }
+
                         @if (Virtualize)
                         {
                             @*<Virtualize @ref="@_virtualizeComponent"
@@ -58,7 +59,12 @@
                         ItemContent="@(item => builder => RenderRow(builder, item.RowIndex, item.Data))"
                         Placeholder="@(placeholderContext => builder => RenderPlaceholderRow(builder, placeholderContext))" />*@
 
-                            <Virtualize Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList()">
+                            ICollection<TGridItem> tblItems;
+                            if (AllowPaging)
+                                tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList();
+                            else
+                                tblItems = ItemsFiltered;
+                            <Virtualize Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="tblItems">
                                 <ItemContent>
                                     @{
                                         RenderVirtualizedRows(__builder4, item);
@@ -107,13 +113,19 @@
             EditIndex += 3;
         }
 
-        foreach (var item in ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList())
+        //foreach (var item in ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList())
+        ICollection<TGridItem> tblItems;
+        if (AllowPaging)
+            tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList();
+        else
+            tblItems = ItemsFiltered;
+        foreach (var item in tblItems)
             RenderRow(__builder, RowIndex++, item);
     }
 
     private void RenderRow(RenderTreeBuilder __builder, int rowIndex, TGridItem item)
     {
-        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex" >
+        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex">
             @foreach (var col in _columns)
             {
                 <td class="" @key="@col">

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Components.Rendering;
 namespace BlazorTableExample;
 
 /// <summary>
-/// Represents a <see cref="Table{TGridItem}"/> column whose cells display a single value.
+/// Represents a <see cref="Grid{TGridItem}"/> column whose cells display a single value.
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 /// <typeparam name="TProp">The type of the value being displayed in the column's cells.</typeparam>

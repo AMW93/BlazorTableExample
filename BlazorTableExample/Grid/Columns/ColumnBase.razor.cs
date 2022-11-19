@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// An abstract base class for columns in a <see cref="Table{TGridItem}"/>.
+/// An abstract base class for columns in a <see cref="Grid{TGridItem}"/>.
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 public abstract partial class ColumnBase<TGridItem>

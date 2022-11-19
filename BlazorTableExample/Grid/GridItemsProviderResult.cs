@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// Holds data being supplied to a <see cref="Table{TGridItem}"/>'s <see cref="Table{TGridItem}.ItemsProvider"/>.
+/// Holds data being supplied to a <see cref="Grid{TGridItem}"/>'s <see cref="Grid{TGridItem}.ItemsProvider"/>.
 /// </summary>
 /// <typeparam name="TGridItem">The type of data represented by each row in the grid.</typeparam>
 public struct GridItemsProviderResult<TGridItem>

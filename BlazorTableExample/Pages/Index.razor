@@ -9,7 +9,7 @@
     }
 </style>
 
-<Table ID="tblTesting" Height="700px" EditIndex=@EditIndex TGridItem="Names" Items="lstNames">
+<Grid @ref=Table ID="tblTesting" Height="700px" EditIndex=@EditIndex TGridItem="Names" Items="lstNames">
     <Columns>
         <TemplateField HeaderText="Toggle">
             <ItemTemplate>
@@ -45,4 +45,4 @@
             @($"Count: {lstNames.Count}")
         </div>
     </FooterTemplate>
-</Table>
+</Grid>

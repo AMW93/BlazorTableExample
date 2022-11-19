@@ -7,10 +7,10 @@ namespace BlazorTableExample;
 // so that it doesn't show up by mistake in unrelated components.
 internal class InternalGridContext<TGridItem>
 {
-    public Table<TGridItem> Grid { get; }
+    public Grid<TGridItem> Grid { get; }
     public EventCallbackSubscribable<object?> ColumnsFirstCollected { get; } = new();
 
-    public InternalGridContext(Table<TGridItem> grid)
+    public InternalGridContext(Grid<TGridItem> grid)
     {
         Grid = grid;
     }

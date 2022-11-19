@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// Configures event handlers for <see cref="Table{TGridItem}"/>.
+/// Configures event handlers for <see cref="Grid{TGridItem}"/>.
 /// </summary>
 [EventHandler("onclosecolumnoptions", typeof(EventArgs), enableStopPropagation: true, enablePreventDefault: true)]
 public static class EventHandlers

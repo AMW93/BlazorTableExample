@@ -4,7 +4,7 @@
 namespace BlazorTableExample;
 
 /// <summary>
-/// An interface that, if implemented by a <see cref="ColumnBase{TGridItem}"/> subclass, allows a <see cref="Table{TGridItem}"/>
+/// An interface that, if implemented by a <see cref="ColumnBase{TGridItem}"/> subclass, allows a <see cref="Grid{TGridItem}"/>
 /// to understand the sorting rules associated with that column.
 ///
 /// If a <see cref="ColumnBase{TGridItem}"/> subclass does not implement this, that column can still be marked as sortable and can
