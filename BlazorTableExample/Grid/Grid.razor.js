@@ -56,10 +56,6 @@ function enableColumnResizing(tableElement) {
     });
 }
 
-export async function WidthCallback() {
-    await dotnet.invokeMethodAsync('WidthChanged');
-}
-
 
 
 ////////////////////////////////////////////////////////////////////////////////

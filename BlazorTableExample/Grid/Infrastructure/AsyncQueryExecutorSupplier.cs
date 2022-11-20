@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BlazorTableExample;
 
@@ -25,22 +24,18 @@ internal static class AsyncQueryExecutorSupplier
     {
         if (queryable is not null)
         {
-            var executor = services.GetService<IAsyncQueryExecutor>();
+            IAsyncQueryExecutor? executor = services.GetService<IAsyncQueryExecutor>();
 
             if (executor is null)
             {
                 // It's useful to detect if the developer is unaware that they should be using the EF adapter, otherwise
                 // they will likely never notice and simply deploy an inefficient app that blocks threads on each query.
-                var providerType = queryable.Provider?.GetType();
+                Type? providerType = queryable.Provider?.GetType();
                 if (providerType is not null && IsEntityFrameworkProviderTypeCache.GetOrAdd(providerType, IsEntityFrameworkProviderType))
-                {
                     throw new InvalidOperationException($"The supplied {nameof(IQueryable)} is provided by Entity Framework. To query it efficiently, you must reference the package Microsoft.AspNetCore.Components.QuickGrid.EntityFrameworkAdapter and call AddQuickGridEntityFrameworkAdapter on your service collection.");
-                }
             }
             else if (executor.IsSupported(queryable))
-            {
                 return executor;
-            }
         }
 
         return null;

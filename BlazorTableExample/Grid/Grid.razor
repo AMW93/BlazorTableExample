@@ -61,7 +61,7 @@
 
                             ICollection<TGridItem> tblItems;
                             if (AllowPaging)
-                                tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList();
+                                tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToArray();
                             else
                                 tblItems = ItemsFiltered;
                             <Virtualize Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="tblItems">
@@ -95,18 +95,16 @@
 
     private void RenderVirtualizedRows(RenderTreeBuilder __builder, TGridItem item)
     {
-        var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
-        RowIndex = initialRowIndex;
+        //var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
         if (EditIndex != -1)
             EditItem = Items.ElementAt(EditIndex);
 
-        RenderRow(__builder, RowIndex++, item);
+        RenderRow(__builder, item);
     }
 
     private void RenderNonVirtualizedRows(RenderTreeBuilder __builder)
     {
-        var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
-        RowIndex = initialRowIndex;
+        //var initialRowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
         if (EditIndex != -1)
         {
             EditItem = Items.ElementAt(EditIndex);
@@ -114,18 +112,18 @@
         }
 
         //foreach (var item in ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList())
-        ICollection<TGridItem> tblItems;
+        IEnumerable<TGridItem> tblItems;
         if (AllowPaging)
-            tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToList();
+            tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize);
         else
             tblItems = ItemsFiltered;
         foreach (var item in tblItems)
-            RenderRow(__builder, RowIndex++, item);
+            RenderRow(__builder, item);
     }
 
-    private void RenderRow(RenderTreeBuilder __builder, int rowIndex, TGridItem item)
+    private void RenderRow(RenderTreeBuilder __builder, TGridItem item)
     {
-        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))" aria-rowindex="@rowIndex">
+        <tr class="@($"tblRow{ID}")" @key="@(ItemKey(item))">
             @foreach (var col in _columns)
             {
                 <td class="" @key="@col">
@@ -139,7 +137,7 @@
 
     private void RenderPlaceholderRow(RenderTreeBuilder __builder, PlaceholderContext placeholderContext)
     {
-        <tr class="@($"tblRow{ID}")" aria-rowindex="@(placeholderContext.Index + 1)">
+        <tr class="@($"tblRow{ID}")">
             @foreach (var col in _columns)
             {
                 <td class="grid-cell-placeholder" @key="@col">
@@ -153,11 +151,10 @@
 
     private void RenderColumnHeaders(RenderTreeBuilder __builder)
     {
-        //foreach (var col in _columns)
         for (int i = 0; i < _columns.Count; i++)
         {
             var col = _columns[i];
-            <th title="@ColumnHeaderTooltip(col)" class="@ColumnHeaderClass(col)" aria-sort="@AriaSortValue(col)" @key="@col" scope="col">
+            <th title=@ColumnHeaderTooltip(col) class="@ColumnHeaderClass(col)" aria-sort="@AriaSortValue(col)" @key="@col" scope="col">
                 <div class="tblHeaderOptionsContainer">
                     <div class="col-header-content">@col.HeaderContent</div>
                     @if (ResizableColumns)
@@ -184,7 +181,7 @@
             <tr class="@($"tblFooter{ID}") tblComponentFooter position-sticky bottom-0 start-0 end-0 bg-white">
                 <td colspan="999">
                     <div class="d-flex flex-row justify-content-between">
-                        <div class="d-flex flex-row">
+                        <div>
                             <ul class="me-3 pagination pagination-sm justify-content-center">
                                 @if (ShowPrvBtn)
                                 {
@@ -222,21 +219,16 @@
                                     </li>
                                 }
                             </ul>
-                            <div>
-                                Items Per Page
-                                <div class="btn-group ms-1">
-                                    <button type="button" class="btn btn-secondary dropdown-toggle sizeSelector" data-bs-toggle="dropdown" aria-expanded="false">
-                                        @PageSize
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        @for (int i = 1; i <= 10; i++)
-                                        {
-                                            int ndx = i * 5;
-                                            <li class="dropdown-item @(ndx == PageSize ? "active" : string.Empty)" @onclick=@(x => PageSize_Changed(@ndx))>@ndx</li>
-                                        }
-                                    </ul>
-                                </div>
-                            </div>
+                        </div>
+                        <div>
+                            <span>Items Per Page</span>
+                            <select class="form-select form-select-sm w-auto" value="@PageSize" @onchange=PageSize_Changed>
+                                @for (int i = 1; i <= 10; i++)
+                                {
+                                    int ndx = i * 5;
+                                    <option value="@ndx">@ndx</option>
+                                }
+                            </select>
                         </div>
                         @if (Items.Count > 0 && ItemsFiltered.Count > 0)
                         {

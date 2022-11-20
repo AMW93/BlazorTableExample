@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Newtonsoft.Json;
 using System.Diagnostics.CodeAnalysis;
 using System.Timers;
+using System.Text.Json;
+using System.Text;
 
 namespace BlazorTableExample;
 
@@ -46,10 +47,8 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     /// </summary>
     //[Parameter] public RenderFragment<TGridItem>? ChildContent { get; set; }
     [Parameter] public RenderFragment? Columns { get; set; }
-
     [Parameter] public bool AllowPaging { get; set; } = false;
     [Parameter] public bool HideFooter { get; set; } = false;
-
     [Parameter] public int PageSize { get; set; } = 0;
 
     /// <summary>
@@ -58,11 +57,9 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     /// size and to ensure accurate scrolling.
     /// </summary>
     [Parameter] public float ItemSize { get; set; } = 53;
-
     [Parameter] public string Height { get; set; } = string.Empty;
     [Parameter] public string Width { get; set; } = "fit-content";
     [Parameter, EditorRequired] public string ID { get; set; } = string.Empty;
-
     [Parameter, AllowNull] public RenderFragment? FooterTemplate { get; set; }
 
     /// <summary>
@@ -88,7 +85,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter] public int EditIndex { get; set; } = -1;
 
-    [Parameter] public string SearchWidth { get; set; } = "350px";
+    [Parameter] public string SearchWidth { get; set; } = "250px";
     [Parameter] public bool Searchable { get; set; } = true;
     [Parameter] public EventCallback ColumnWidthChanged { get; set; }
 
@@ -103,7 +100,6 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter] public EventCallback AddRecord_Click { get; set; }
 
-    public int RowIndex { get; set; } = 0;
     private ElementReference _gridReference;
     private Virtualize<TGridItem>? _virtualizeComponent;
     private List<TGridItem> ItemsFiltered = new(); //the collection we do near everything with. This is the one that matters most
@@ -174,8 +170,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         // As a special case, we don't issue the first data load request until we've collected the initial set of columns
         // This is so we can apply default sort order (or any future per-column options) before loading data
         // We use EventCallbackSubscriber to safely hook this async operation into the synchronous rendering flow
-        var columnsFirstCollectedSubscriber = new EventCallbackSubscriber<object?>(
-            EventCallback.Factory.Create<object?>(this, RefreshDataCoreAsync));
+        EventCallbackSubscriber<object?> columnsFirstCollectedSubscriber = new(EventCallback.Factory.Create<object?>(this, RefreshDataCoreAsync));
         columnsFirstCollectedSubscriber.SubscribeOrMove(_internalGridContext.ColumnsFirstCollected);
     }
 
@@ -201,12 +196,18 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     /// <inheritdoc />
     protected override Task OnParametersSetAsync()
     {
-        if (Searchable && lstSearch.Count == 0 || Searchable && JsonConvert.SerializeObject(ItemsState) != JsonConvert.SerializeObject(Items))
+        if (Searchable && lstSearch.Count == 0 || Searchable && JsonSerializer.Serialize(ItemsState) != JsonSerializer.Serialize(Items))
         {
-            ItemsState = new(JsonConvert.DeserializeObject<List<TGridItem>>(JsonConvert.SerializeObject(Items)));
+            ItemsState = new(JsonSerializer.Deserialize<List<TGridItem>>(JsonSerializer.Serialize(Items)));
             lstSearch.Clear();
-            for (int i = 0; i < Items.Count; i++)
-                AddToSearch(Items[i]);
+            //Run this on a separate thread so we don't have to wait for something that's not going to IMMEDIATELY be needed
+            //But it will speed up the perceived load time by a bit
+            _ = Task.Run(() =>
+            {
+                StringBuilder sbSearch = new();
+                for (int i = 0; i < Items.Count; i++)
+                    AddToSearch(Items[i], sbSearch);
+            });
         }
 
         if ((!FilterMode && Items.Count != ItemsFiltered.Count) || (ItemsFiltered.Count == 0 && Items.Count > 0))
@@ -215,33 +216,29 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         if (Items is not null && ItemsProvider is not null)
             throw new InvalidOperationException($"{nameof(Grid<TGridItem>)} requires one of {nameof(Items)} or {nameof(ItemsProvider)}, but both were specified.");
 
-        if (AllowPaging && PageSize == 0)
-            PageSize = 10;
-        else if (!AllowPaging)
-            PageSize = Items.Count;
-
         if (AllowPaging)
         {
+            if (PageSize == 0)
+                PageSize = 10;
+
+            ShowOverflowBack = false;
             PageCount = (int)Math.Ceiling(Items.Count / (double)PageSize);
             if (PageCount > 5)
             {
                 ShowOverflowForward = true;
-                ShowOverflowBack = false;
                 VisiblePageCnt = 5;
             }
             else
             {
                 VisiblePageCnt = PageCount;
                 ShowOverflowForward = false;
-                ShowOverflowBack = false;
             }
-
             ShowNextPrv();
         }
 
         // Perform a re-query only if the data source or something else has changed
-        var _newItemsOrItemsProvider = Items ?? (object?)ItemsProvider;
-        var dataSourceHasChanged = _newItemsOrItemsProvider != _lastAssignedItemsOrProvider;
+        object? _newItemsOrItemsProvider = Items ?? (object?)ItemsProvider;
+        bool dataSourceHasChanged = _newItemsOrItemsProvider != _lastAssignedItemsOrProvider;
         if (dataSourceHasChanged)
         {
             _lastAssignedItemsOrProvider = _newItemsOrItemsProvider;
@@ -262,12 +259,6 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             _jsModule = await Script.InvokeAsync<IJSObjectReference>("import", "./Grid/Grid.razor.js");
             _jsEventDisposable = await _jsModule.InvokeAsync<IJSObjectReference>("init", _gridReference, DotNet);
         }
-    }
-
-    [JSInvokable]
-    public async Task WidthChanged()
-    {
-        await ColumnWidthChanged.InvokeAsync();
     }
 
     private void ResetTimer()
@@ -331,7 +322,6 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
 
     private async Task Filter()
     {
-        RowIndex = 0;
         EditIndex = -1;
         if (SearchText.IsNullOrEmpty())
         {
@@ -349,13 +339,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
     }
 
-    private void AddToSearch(TGridItem item)
+    private void AddToSearch(TGridItem item, StringBuilder sb)
     {
-        List<string> lstVals = new();
         foreach (PropertyInfo prop in item.GetType().GetProperties())
-            lstVals.Add(prop.GetValue(item, null).ToString());
-
-        lstSearch.Add(lstVals.JoinWith(", "));
+            sb.Append(prop.GetValue(item, null).ToString());
+        lstSearch.Add(sb.ToString());
+        sb.Clear();
     }
 
     // Invoked by descendant columns at a special time during rendering
@@ -364,7 +353,6 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         if (_collectingColumns)
         {
             _columns.Add(column);
-
             if (_sortByColumn is null && isDefaultSortDirection.HasValue)
             {
                 _sortByColumn = column;
@@ -399,7 +387,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             {
                 SortDirection.Ascending => true,
                 SortDirection.Descending => false,
-                SortDirection.Auto => _sortByColumn == column ? !_sortByAscending : true,
+                SortDirection.Auto => _sortByColumn != column || !_sortByAscending,
                 _ => throw new NotSupportedException($"Unknown sort direction {direction}"),
             };
             _lastDirection = _sortByAscending ? SortDirection.Ascending : SortDirection.Descending;
@@ -407,7 +395,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             StateHasChanged(); // We want to see the updated sort order in the header, even before the data query is completed
         }
         else
-            _sortByAscending = _lastDirection == SortDirection.Ascending ? true : false;
+            _sortByAscending = _lastDirection == SortDirection.Ascending;
         return RefreshDataAsync();
     }
 
@@ -428,27 +416,27 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     {
         // Move into a "loading" state, cancelling any earlier-but-still-pending load
         _pendingDataLoadCancellationTokenSource?.Cancel();
-        var thisLoadCts = _pendingDataLoadCancellationTokenSource = new CancellationTokenSource();
+        CancellationTokenSource thisLoadCts = _pendingDataLoadCancellationTokenSource = new();
 
-        if (_virtualizeComponent is not null)
+        //if (_virtualizeComponent is not null)
+        //{
+        // If we're using Virtualize, we have to go through its RefreshDataAsync API otherwise:
+        // (1) It won't know to update its own internal state if the provider output has changed
+        // (2) We won't know what slice of data to query for
+        //await _virtualizeComponent.RefreshDataAsync();
+        //_pendingDataLoadCancellationTokenSource = null;
+        //}
+        //else
+        //{
+        // If we're not using Virtualize, we build and execute a request against the items provider directly
+        GridItemsProviderRequest<TGridItem> request = new(0, null, _sortByColumn, _sortByAscending, thisLoadCts.Token);
+        GridItemsProviderResult<TGridItem> result = await ResolveItemsRequestAsync(request);
+        if (!thisLoadCts.IsCancellationRequested)
         {
-            // If we're using Virtualize, we have to go through its RefreshDataAsync API otherwise:
-            // (1) It won't know to update its own internal state if the provider output has changed
-            // (2) We won't know what slice of data to query for
-            await _virtualizeComponent.RefreshDataAsync();
+            ItemsFiltered = new(result.Items);
             _pendingDataLoadCancellationTokenSource = null;
         }
-        else
-        {
-            // If we're not using Virtualize, we build and execute a request against the items provider directly
-            var request = new GridItemsProviderRequest<TGridItem>(0, null, _sortByColumn, _sortByAscending, thisLoadCts.Token);
-            var result = await ResolveItemsRequestAsync(request);
-            if (!thisLoadCts.IsCancellationRequested)
-            {
-                ItemsFiltered = new(result.Items);
-                _pendingDataLoadCancellationTokenSource = null;
-            }
-        }
+        //}
 
         SetVirtualization();
     }
@@ -456,45 +444,33 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     // Normalizes all the different ways of configuring a data source so they have common GridItemsProvider-shaped API
     private async ValueTask<GridItemsProviderResult<TGridItem>> ResolveItemsRequestAsync(GridItemsProviderRequest<TGridItem> request)
     {
-
         if (ItemsProvider is not null)
-        {
             return await ItemsProvider(request);
-        }
         else if (ItemsFiltered is not null)
         {
-            var totalItemCount = _asyncQueryExecutor is null ? ItemsFiltered.Count() : await _asyncQueryExecutor.CountAsync(ItemsFiltered.AsQueryable());
-            //var result = request.ApplySorting(Items.AsQueryable()).Skip(request.StartIndex);
-            var result = request.ApplySorting(ItemsFiltered.AsQueryable());
+            IQueryable<TGridItem> result = request.ApplySorting(ItemsFiltered.AsQueryable());
             if (request.Count.HasValue)
-            {
                 result = result.Take(request.Count.Value);
-            }
-            var resultArray = _asyncQueryExecutor is null ? result.ToArray() : await _asyncQueryExecutor.ToArrayAsync(result);
-            return GridItemsProviderResult.From(resultArray, resultArray.Count());
+            TGridItem[] resultArray = _asyncQueryExecutor is null ? result.ToArray() : await _asyncQueryExecutor.ToArrayAsync(result);
+            return GridItemsProviderResult.From(resultArray, resultArray.Length);
         }
         else
-        {
             return GridItemsProviderResult.From(Array.Empty<TGridItem>(), 0);
-        }
     }
 
-    private string AriaSortValue(ColumnBase<TGridItem> column)
-        => _sortByColumn == column
-            ? (_sortByAscending ? "ascending" : "descending")
-            : "none";
+    private string AriaSortValue(ColumnBase<TGridItem> column) => _sortByColumn == column ? (_sortByAscending ? "ascending" : "descending") : "none";
 
-    private string? ColumnHeaderClass(ColumnBase<TGridItem> column)
-        => _sortByColumn == column
-        ? $"{ColumnClass(column)} {(_sortByAscending ? "col-sort-asc" : "col-sort-desc")}"
-        : ColumnClass(column);
+    private string? ColumnHeaderClass(ColumnBase<TGridItem> column) => _sortByColumn == column ? $"{ColumnClass(column)} {(_sortByAscending ? "col-sort-asc" : "col-sort-desc")}" : ColumnClass(column);
 
-    private string? ColumnHeaderTooltip(ColumnBase<TGridItem> column) => column.HeaderTooltip;
+    private static string? ColumnHeaderTooltip(ColumnBase<TGridItem> column) => column.HeaderTooltip;
 
     private bool ShowHeaderAddButton() => ShowAddButton;
 
     private async Task HeaderAddButton_Clicked(ColumnBase<TGridItem> column)
     {
+        if (column is null)
+            throw new ArgumentNullException($"Column is null {nameof(column)}");
+
         if (AddRecord_Click.HasDelegate)
             await AddRecord_Click.InvokeAsync();
         else
@@ -593,11 +569,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         ShowNextPrv();
     }
 
-    private void PageSize_Changed(int size)
+    private void PageSize_Changed(ChangeEventArgs e)
     {
         StartIndex = 1;
-        PageSize = size;
         PageIndex = 1;
+        SkipCnt = 0;
+        PageSize = Convert.ToInt32(e.Value);
         PageCount = (int)Math.Ceiling(ItemsFiltered.Count / (double)PageSize);
         ShowNextPrv();
 
@@ -629,14 +606,5 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             ShowNextBtn = false;
             ShowPrvBtn = false;
         }
-    }
-
-    private async Task start()
-    {
-        await _jsModule.InvokeVoidAsync("start");
-    }
-    private async Task dragover()
-    {
-        await _jsModule.InvokeVoidAsync("dragover");
     }
 }
