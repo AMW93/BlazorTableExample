@@ -6,7 +6,6 @@ using System.Timers;
 using System.Text.Json;
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Linq;
 
 namespace BlazorTableExample;
 
@@ -133,7 +132,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private object? _lastAssignedItemsOrProvider;
     private CancellationTokenSource? _pendingDataLoadCancellationTokenSource;
     private bool ShowSearchSpinner = false;
-    private HashSet<string> lstSearch = new(StringComparer.InvariantCultureIgnoreCase);
+    private List<string> lstSearch = new();
     private string SearchText = string.Empty;
     private System.Timers.Timer timer = default!;
     private CancellationTokenSource _token;
@@ -346,19 +345,10 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         }
         else
         {
-            var recs =
+            ItemsFiltered = new(
                 lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                   .Select((x, Index) => new { x, Index });
-
-
-            //ItemsFiltered = new(
-            // lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-            //.Select((Value, Index) => new { Items.ElementAt(lstSearch.ElementAt(Index)), Index })
-            //);
-
-            //ItemsFiltered = new(
-            //    lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-            //);
+                         .Select(x => Items.ElementAt(lstSearch.IndexOf(x)))
+            );
         }
 
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
@@ -369,7 +359,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         PropertyInfo[] props = type.GetProperties();
         int length = props.Length;
         int i = 0;
-        while (i < length)
+        while(i < length)
         {
             sb.Append(props[i].GetValue(item, null));
             i++;
