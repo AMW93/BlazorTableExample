@@ -5,6 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Timers;
 using System.Text.Json;
 using System.Text;
+using System.Text.Json.Nodes;
+using System.Linq;
 
 namespace BlazorTableExample;
 
@@ -131,7 +133,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private object? _lastAssignedItemsOrProvider;
     private CancellationTokenSource? _pendingDataLoadCancellationTokenSource;
     private bool ShowSearchSpinner = false;
-    private List<string> lstSearch = new();
+    private HashSet<string> lstSearch = new(StringComparer.InvariantCultureIgnoreCase);
     private string SearchText = string.Empty;
     private System.Timers.Timer timer = default!;
     private CancellationTokenSource _token;
@@ -187,10 +189,20 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
 
     private void SetVirtualization()
     {
-        if (ItemsFiltered.Count > 100 && !AllowPaging)
-            Virtualize = true;
+        if (Debugger.IsAttached)
+        {
+            if (ItemsFiltered.Count > 20 && !AllowPaging)
+                Virtualize = true;
+            else
+                Virtualize = false;
+        }
         else
-            Virtualize = false;
+        {
+            if (ItemsFiltered.Count > 100 && !AllowPaging)
+                Virtualize = true;
+            else
+                Virtualize = false;
+        }
     }
 
     /// <inheritdoc />
@@ -204,9 +216,13 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             //But it will speed up the perceived load time by a bit
             _ = Task.Run(() =>
             {
+                Stopwatch sw = Stopwatch.StartNew();
                 StringBuilder sbSearch = new();
+                Type itemType = typeof(TGridItem);
                 for (int i = 0; i < Items.Count; i++)
-                    AddToSearch(Items[i], sbSearch);
+                    AddToSearch(Items[i], itemType, sbSearch);
+                sw.Stop();
+                Debug.WriteLine($"Cached Type {sw.ElapsedTicks}");
             });
         }
 
@@ -330,19 +346,34 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         }
         else
         {
-            ItemsFiltered = new(
+            var recs =
                 lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                         .Select(x => Items.ElementAt(lstSearch.IndexOf(x)))
-            );
+                   .Select((x, Index) => new { x, Index });
+
+
+            //ItemsFiltered = new(
+            // lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            //.Select((Value, Index) => new { Items.ElementAt(lstSearch.ElementAt(Index)), Index })
+            //);
+
+            //ItemsFiltered = new(
+            //    lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            //);
         }
 
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
     }
 
-    private void AddToSearch(TGridItem item, StringBuilder sb)
+    private void AddToSearch(TGridItem item, Type type, StringBuilder sb)
     {
-        foreach (PropertyInfo prop in item.GetType().GetProperties())
-            sb.Append(prop.GetValue(item, null).ToString());
+        PropertyInfo[] props = type.GetProperties();
+        int length = props.Length;
+        int i = 0;
+        while (i < length)
+        {
+            sb.Append(props[i].GetValue(item, null));
+            i++;
+        }
         lstSearch.Add(sb.ToString());
         sb.Clear();
     }
