@@ -132,7 +132,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private object? _lastAssignedItemsOrProvider;
     private CancellationTokenSource? _pendingDataLoadCancellationTokenSource;
     private bool ShowSearchSpinner = false;
-    private List<string> lstSearch = new();
+    private Dictionary<int, string> lstSearch = new();
     private string SearchText = string.Empty;
     private System.Timers.Timer timer = default!;
     private CancellationTokenSource _token;
@@ -345,10 +345,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         }
         else
         {
-            ItemsFiltered = new(
-                lstSearch.Where(x => x.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                         .Select(x => Items.ElementAt(lstSearch.IndexOf(x)))
-            );
+            ItemsFiltered = new();
+            foreach(var rec in lstSearch)
+            {
+                if (rec.Value.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                    ItemsFiltered.Add(Items[rec.Key - 1]);
+            }
         }
 
         await SortByColumnAsync(_sortByColumn, _lastDirection, true);
@@ -359,12 +361,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         PropertyInfo[] props = type.GetProperties();
         int length = props.Length;
         int i = 0;
-        while(i < length)
+        while (i < length)
         {
             sb.Append(props[i].GetValue(item, null));
             i++;
         }
-        lstSearch.Add(sb.ToString());
+        lstSearch.Add(lstSearch.Count + 1, sb.ToString());
         sb.Clear();
     }
 
