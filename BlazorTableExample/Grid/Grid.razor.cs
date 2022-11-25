@@ -6,6 +6,8 @@ using System.Timers;
 using System.Text.Json;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace BlazorTableExample;
 
@@ -132,7 +134,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private object? _lastAssignedItemsOrProvider;
     private CancellationTokenSource? _pendingDataLoadCancellationTokenSource;
     private bool ShowSearchSpinner = false;
-    private Dictionary<int, string> lstSearch = new();
+    private List<string> lstSearch = new();
     private string SearchText = string.Empty;
     private System.Timers.Timer timer = default!;
     private CancellationTokenSource _token;
@@ -149,6 +151,7 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private int SkipCnt = 0;
     private bool AllowRender = true;
     private bool FilterMode = false;
+    private bool ShowUI = false;
     protected override bool ShouldRender() => AllowRender;
 
 
@@ -177,13 +180,13 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        await base.OnInitializedAsync();
         ItemsState = new();
         _token = new();
         timer = new System.Timers.Timer(250);
         timer.Elapsed += OnTypingDone;
         timer.AutoReset = false;
-
-        await base.OnInitializedAsync();
+        ShowUI = true;
     }
 
     private void SetVirtualization()
@@ -218,8 +221,10 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
                 Stopwatch sw = Stopwatch.StartNew();
                 StringBuilder sbSearch = new();
                 Type itemType = typeof(TGridItem);
+                Span<TGridItem> listAsSpan = CollectionsMarshal.AsSpan(Items);
+                ref var searchSpace = ref MemoryMarshal.GetReference(listAsSpan);
                 for (int i = 0; i < Items.Count; i++)
-                    AddToSearch(Items[i], itemType, sbSearch);
+                    AddToSearch(Unsafe.Add(ref searchSpace, i), itemType, sbSearch);
                 sw.Stop();
                 Debug.WriteLine($"Cached Type {sw.ElapsedTicks}");
             });
@@ -346,10 +351,18 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
         else
         {
             ItemsFiltered = new();
-            foreach(var rec in lstSearch)
+            _ = IsDone();
+            bool IsDone()
             {
-                if (rec.Value.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                    ItemsFiltered.Add(Items[rec.Key - 1]);
+                Span<string> listAsSpan = CollectionsMarshal.AsSpan(lstSearch);
+                ref var searchSpace = ref MemoryMarshal.GetReference(listAsSpan);
+                for (int i = 0; i < lstSearch.Count; i++)
+                {
+                    if (Unsafe.Add(ref searchSpace, i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                        ItemsFiltered.Add(Items[i]);
+                }
+
+                return true;
             }
         }
 
@@ -359,14 +372,10 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
     private void AddToSearch(TGridItem item, Type type, StringBuilder sb)
     {
         PropertyInfo[] props = type.GetProperties();
-        int length = props.Length;
-        int i = 0;
-        while (i < length)
-        {
-            sb.Append(props[i].GetValue(item, null));
-            i++;
-        }
-        lstSearch.Add(lstSearch.Count + 1, sb.ToString());
+        ref var searchSpace = ref MemoryMarshal.GetArrayDataReference(props);
+        for (int i = 0; i < props.Length; i++)
+            sb.Append(Unsafe.Add(ref searchSpace, i).GetValue(item, null));
+        lstSearch.Add(sb.ToString());
         sb.Clear();
     }
 
@@ -460,6 +469,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             _pendingDataLoadCancellationTokenSource = null;
         }
         //}
+
+        if (_virtualizeComponent is not null)
+        {
+            await _virtualizeComponent.RefreshDataAsync();
+            StateHasChanged();
+        }
 
         SetVirtualization();
     }

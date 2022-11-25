@@ -2,94 +2,105 @@
 @using Microsoft.AspNetCore.Components.Rendering;
 @typeparam TGridItem
 
-<div class="vstack gap-1 w-100 table-responsive" style="--table-body-height: @Height; --table-body-width: @Width;">
-    <CascadingValue TValue="InternalGridContext<TGridItem>" IsFixed="true" Value="@_internalGridContext">
-        @if (Searchable && Items.Count > 0)
-        {
-            <div class="d-flex flex-row align-items-center ms-1 mt-1 mb-1">
-                <div class="input-group input-group-sm" style="width: @SearchWidth;">
-                    <input type="text" class="form-control form-control-sm" @bind="@SearchText" @bind:event="oninput" @onkeyup="@ResetTimer" placeholder="Search Results..." />
-                    <span class="input-group-text">
-                        @if (ShowSearchSpinner)
+@if (!ShowUI)
+{
+    <div class="hstack gap-0">
+        <span>Loading...</span>
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="vstack gap-1 w-100 table-responsive" style="--table-body-height: @Height; --table-body-width: @Width;">
+        <CascadingValue TValue="InternalGridContext<TGridItem>" IsFixed="true" Value="@_internalGridContext">
+            @if (Searchable && Items.Count > 0)
+            {
+                <div class="d-flex flex-row align-items-center ms-1 mt-1 mb-1">
+                    <div class="input-group input-group-sm" style="width: @SearchWidth;">
+                        <input type="text" class="form-control form-control-sm" @bind="@SearchText" @bind:event="oninput" @onkeyup="@ResetTimer" placeholder="Search Results..." />
+                        <span class="input-group-text">
+                            @if (ShowSearchSpinner)
+                            {
+                                @*<LoadingSpinner Height="20px" ShowLoadingText=false />*@
+                            }
+                            else
+                            {
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+                                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+                                </svg>
+                            }
+                        </span>
+                        @if (ShowSearchCount && !SearchText.IsNullOrEmpty())
                         {
-                            @*<LoadingSpinner Height="20px" ShowLoadingText=false />*@
+                            <span class="input-group-text">@ItemsFiltered.Count</span>
                         }
-                        else
-                        {
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-                                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
-                            </svg>
-                        }
-                    </span>
-                    @if (ShowSearchCount && !SearchText.IsNullOrEmpty())
-                    {
-                        <span class="input-group-text">@ItemsFiltered.Count</span>
-                    }
+                    </div>
                 </div>
-            </div>
-        }
-
-        <div>
-            @{
-                StartCollectingColumns();
             }
 
-            @Columns
-
-            <Defer>
+            <div>
                 @{
-                    FinishCollectingColumns();
+                    StartCollectingColumns();
                 }
-                <ColumnsCollectedNotifier TGridItem="TGridItem" />
-                <table id=@ID class="@GridClass() table tblComponent" @ref="_gridReference">
-                    <tbody style="display: block; height: auto; max-height: @Height; width: @Width; overflow: auto">
-                        @if (Items.Count > 0)
-                        {
-                            <tr class="@($"tblHeader{ID}") tblComponentHeader sticky-top">
-                                @_renderColumnHeaders
-                            </tr>
-                        }
 
-                        @if (Virtualize)
-                        {
-                            @*<Virtualize @ref="@_virtualizeComponent"
+                @Columns
+
+                <Defer>
+                    @{
+                        FinishCollectingColumns();
+                    }
+                    <ColumnsCollectedNotifier TGridItem="TGridItem" />
+                    <table id=@ID class="@GridClass() table tblComponent" @ref="_gridReference">
+                        <tbody style="display: block; height: auto; max-height: @Height; width: @Width; overflow: auto">
+                            @if (Items.Count > 0)
+                            {
+                                <tr class="@($"tblHeader{ID}") tblComponentHeader sticky-top">
+                                    @_renderColumnHeaders
+                                </tr>
+                            }
+
+                            @if (Virtualize)
+                            {
+                                @*<Virtualize @ref="@_virtualizeComponent"
                         TItem="(int RowIndex, TGridItem Data)"
                         ItemSize="@ItemSize"
                         ItemsProvider="@ProvideVirtualizedItems"
                         ItemContent="@(item => builder => RenderRow(builder, item.RowIndex, item.Data))"
                         Placeholder="@(placeholderContext => builder => RenderPlaceholderRow(builder, placeholderContext))" />*@
 
-                            ICollection<TGridItem> tblItems;
-                            if (AllowPaging)
-                                tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToArray();
+                                ICollection<TGridItem> tblItems;
+                                if (AllowPaging)
+                                    tblItems = ItemsFiltered.Skip(SkipCnt).Take(PageSize).ToArray();
+                                else
+                                    tblItems = ItemsFiltered;
+                                <Virtualize @ref="@_virtualizeComponent" Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="tblItems">
+                                    <ItemContent>
+                                        @{
+                                            RenderVirtualizedRows(__builder4, item);
+                                        }
+                                    </ItemContent>
+                                    <Placeholder>
+                                        @*<LoadingSpinner Height="25px" />*@
+                                    </Placeholder>
+                                </Virtualize>
+                            }
                             else
-                                tblItems = ItemsFiltered;
-                            <Virtualize Context="item" TItem="TGridItem" ItemSize="@ItemSize" Items="tblItems">
-                                <ItemContent>
-                                    @{
-                                        RenderVirtualizedRows(__builder4, item);
-                                    }
-                                </ItemContent>
-                                <Placeholder>
-                                    @*<LoadingSpinner Height="25px" />*@
-                                </Placeholder>
-                            </Virtualize>
-                        }
-                        else
-                        {
-                            @_renderNonVirtualizedRows
-                        }
-                        @{
-                            RenderFooterContent(__builder3);
-                        }
-                    </tbody>
-                </table>
+                            {
+                                @_renderNonVirtualizedRows
+                            }
+                            @{
+                                RenderFooterContent(__builder3);
+                            }
+                        </tbody>
+                    </table>
 
-            </Defer>
-        </div>
-    </CascadingValue>
-</div>
-
+                </Defer>
+            </div>
+        </CascadingValue>
+    </div>
+}
 
 @code {
 

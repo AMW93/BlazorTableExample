@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components.Server.Circuits;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 
 namespace BlazorTableExample
 {
@@ -10,6 +11,7 @@ namespace BlazorTableExample
         private int EditIndex = -1;
         private string NewName = string.Empty;
         private Grid<Names>? Table = new();
+        private bool ShowUI = false;
 
         private async Task SaveRow()
         {
@@ -20,19 +22,21 @@ namespace BlazorTableExample
 
         protected override async Task OnInitializedAsync()
         {
-            GetNames();
+            await base.OnInitializedAsync();
+            lstNames.Clear();
+            for (int i = 0; i < 50; i++)
+                GetNames();
             foreach (var rec in lstNames.Select((value, i) => (value, i)))
             {
                 int index = rec.i;
                 rec.value.nameID = index + 1;
             }
 
-            await base.OnInitializedAsync();
+            ShowUI = true;
         }
 
         private void GetNames()
         {
-            lstNames.Clear();
             lstNames.Add(new Names { fName = "Liam", lName = "Karter", nameID = 0 });
             lstNames.Add(new Names { fName = "Noah     ", lName = "Timothy", nameID = 0 });
             lstNames.Add(new Names { fName = "Oliver   ", lName = "Abraham", nameID = 0 });
