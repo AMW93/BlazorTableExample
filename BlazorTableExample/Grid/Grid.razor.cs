@@ -218,15 +218,12 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
             //But it will speed up the perceived load time by a bit
             _ = Task.Run(() =>
             {
-                Stopwatch sw = Stopwatch.StartNew();
                 StringBuilder sbSearch = new();
                 Type itemType = typeof(TGridItem);
                 Span<TGridItem> listAsSpan = CollectionsMarshal.AsSpan(Items);
                 ref var searchSpace = ref MemoryMarshal.GetReference(listAsSpan);
                 for (int i = 0; i < Items.Count; i++)
                     AddToSearch(Unsafe.Add(ref searchSpace, i), itemType, sbSearch);
-                sw.Stop();
-                Debug.WriteLine($"Cached Type {sw.ElapsedTicks}");
             });
         }
 
@@ -358,10 +355,9 @@ public partial class Grid<TGridItem> : ComponentBase, IAsyncDisposable
                 ref var searchSpace = ref MemoryMarshal.GetReference(listAsSpan);
                 for (int i = 0; i < lstSearch.Count; i++)
                 {
-                    if (Unsafe.Add(ref searchSpace, i).Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                    if (Unsafe.Add(ref searchSpace, i).Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase))
                         ItemsFiltered.Add(Items[i]);
                 }
-
                 return true;
             }
         }
